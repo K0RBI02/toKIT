@@ -14,6 +14,8 @@ shows what is going on, including every file you save.
 ## Tools
 
 - **PDF**: merge, rotate & reorder pages, split, extract pages, images to PDF, PDF to images
+- **Office**: Word to PDF, text or HTML, Excel to CSV or JSON, CSV to Excel, text from slides, images from Office files
+- **Audio**: trim audio, convert audio (MP3, WAV), video to MP3
 - **Images**: convert, resize, compress, crop & rotate, remove photo metadata (GPS, camera, date)
 - **Text & data**: word counter, text case, compare texts, format JSON, Base64, URL encode, checksums, sort & clean lines
 - **Generators**: passwords, UUIDs, colour palettes, random picker, placeholder text, QR codes (links to [QR-Maker](https://github.com/K0RBI02/QR-Maker_) for now)
