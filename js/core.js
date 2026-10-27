@@ -17,6 +17,14 @@ const CATEGORIES = [
     icon: DOODLE(`<path d="M8 16 C 30 14, 70 15, 92 14 C 93 38, 91 62, 92 86 C 70 87, 30 85, 9 86 C 7 62, 9 38, 8 16 Z"/><path d="M10 72 L 34 46 L 52 64 L 64 52 L 90 76"/><circle cx="70" cy="34" r="8" fill="var(--accent)"/>`),
   },
   {
+    id: 'office', name: 'Office', color: 'lilac',
+    icon: DOODLE(`<path d="M18 8 C 36 9, 52 8, 66 8 L 84 26 C 83 48, 85 70, 84 92 C 62 93, 40 91, 19 92 C 20 70, 18 40, 18 8 Z"/><path d="M66 8 C 65 14, 66 20, 66 26 C 72 27, 78 26, 84 26"/><path d="M30 44 L 38 76 L 50 52 L 62 76 L 70 44" stroke="var(--accent)"/>`),
+  },
+  {
+    id: 'audio', name: 'Audio', color: 'rose',
+    icon: DOODLE(`<path d="M8 50 L 18 50 M 26 36 L 26 64 M 36 22 L 36 78 M 46 40 L 46 60 M 56 14 L 56 86 M 66 32 L 66 68 M 76 44 L 76 56 M 84 50 L 92 50"/><path d="M56 14 L 56 86" stroke="var(--accent)"/>`),
+  },
+  {
     id: 'text', name: 'Text & data', color: 'cream',
     icon: DOODLE(`<path d="M36 14 C 24 14, 26 30, 26 40 C 26 46, 22 50, 14 50 C 22 50, 26 54, 26 60 C 26 70, 24 86, 36 86"/><path d="M64 14 C 76 14, 74 30, 74 40 C 74 46, 78 50, 86 50 C 78 50, 74 54, 74 60 C 74 70, 76 86, 64 86"/><circle cx="50" cy="50" r="6" fill="var(--accent)" stroke="none"/>`),
   },
@@ -155,6 +163,9 @@ const LIBS = {
   pdflib: 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js',
   jszip: 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
   sortable: 'https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js',
+  mammoth: 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
+  xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  lame: 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js',
 };
 const loaded = {};
 function need(...names) {

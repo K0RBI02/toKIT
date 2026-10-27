@@ -35,10 +35,10 @@ function computeLayout() {
   const m = wide ? Math.round(clamp(W * 0.03, 24, 48)) : 16;
   const hud = 72;
   const regionH = H - 2 * m - hud;
-  const S0 = wide ? 0.62 : 0.78;
+  const S0 = wide ? 0.78 : 0.8;
   let T, O, R;
   if (wide) {
-    const tw = Math.round(clamp(W * 0.34, 360, 560));
+    const tw = Math.round(clamp(W * 0.4, 380, 640));
     T = { x: 0, y: 0, w: tw, h: Math.round(tw * 0.64) };
     const sideW = W - 3 * m - tw;
     O = { x: -m - sideW, y: 0, w: sideW, h: regionH };
@@ -160,35 +160,47 @@ function say(fn) {
   typing = typing.then(fn).catch(console.error);
   return typing;
 }
+// The empty prompt waiting at the bottom; the next command is typed into it instead of a new line
+let promptEl = null;
 async function command(text) {
   cursor.remove();
-  const el = line(PROMPT);
+  const el = promptEl || line(PROMPT);
+  promptEl = null;
   const span = h('span', {});
   el.append(span, cursor);
   for (const ch of text) {
     span.textContent += ch;
-    await sleep(text.length > 30 ? 12 : 28);
+    await sleep(text.length > 30 ? 25 : 70);
   }
-  await sleep(120);
+  await sleep(350);
   cursor.remove();
 }
 function ready() {
   cursor.remove();
-  line(PROMPT).append(cursor);
+  promptEl = line(PROMPT);
+  promptEl.append(cursor);
+}
+// Output appears line by line, with a pause a person can read along with
+async function print(html, pause = 450) {
+  cursor.remove();
+  if (promptEl) { promptEl.remove(); promptEl = null; }
+  line(html);
+  await sleep(pause);
 }
 const log = (html, cls = 't-dim') => say(async () => {
-  cursor.remove();
-  line(`<span class="${cls}">${html}</span>`);
+  await print(`<span class="${cls}">${html}</span>`, 0);
   ready();
 });
 
 function intro() {
   say(async () => {
-    await sleep(500);
-    await command('tokit');
-    line('<span class="t-dim">drop a file here, or anywhere on the page.</span>');
-    line('<span class="t-dim">or click this window to pick one.</span>');
-    line('<span class="t-dim">pdf, images and text files work today.</span>');
+    ready();
+    await sleep(900);
+    await command('tokit --help');
+    await print('<span class="t-dim">drop a file here, or anywhere on the page.</span>', 700);
+    await print('<span class="t-dim">or click this window to pick one.</span>', 700);
+    await print('<span class="t-dim">works with pdf, images, word, excel,</span>', 250);
+    await print('<span class="t-dim">powerpoint, audio, video and text.</span>', 500);
     ready();
   });
 }
@@ -203,26 +215,44 @@ downloadBlob = (blob, name) => {
 // ---------- Files in, options out ----------
 
 const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|log|xml|html?|css|js|ts|ya?ml|ini|conf|env|sql)$/i;
-const kindOf = (f) => isPdf(f) ? 'pdf' : f.type.startsWith('image/') ? 'image' : (f.type.startsWith('text/') || TEXT_EXT.test(f.name) || f.type === 'application/json') ? 'text' : 'other';
-const KIND_NAME = { pdf: 'pdf', image: 'image', text: 'text', other: 'file' };
+function kindOf(f) {
+  const n = f.name.toLowerCase();
+  if (isPdf(f)) return 'pdf';
+  if (/\.docx$/.test(n)) return 'word';
+  if (/\.(xlsx|xlsm|xls|ods)$/.test(n)) return 'excel';
+  if (/\.pptx$/.test(n)) return 'slides';
+  if (f.type.startsWith('image/')) return 'image';
+  if (f.type.startsWith('audio/') || /\.(mp3|wav|m4a|aac|ogg|oga|opus|flac|weba)$/.test(n)) return 'audio';
+  if (f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/.test(n)) return 'video';
+  if (f.type.startsWith('text/') || TEXT_EXT.test(n) || f.type === 'application/json') return 'text';
+  return 'other';
+}
+const KIND_NAME = { pdf: 'pdf', word: 'word document', excel: 'spreadsheet', slides: 'presentation', image: 'image', audio: 'audio', video: 'video', text: 'text', other: 'file' };
 
 function suggest(list) {
   const kinds = new Set(list.map(kindOf));
   const one = list.length === 1;
-  if (kinds.size === 1 && kinds.has('pdf')) {
+  const only = (k) => kinds.size === 1 && kinds.has(k);
+  if (only('pdf')) {
     return one ? ['organize-pdf', 'split-pdf', 'extract-pages', 'pdf-to-images', 'merge-pdf', 'hash']
       : ['merge-pdf', 'organize-pdf'];
   }
-  if (kinds.size === 1 && kinds.has('image')) {
+  if (only('image')) {
     const metadata = list.every((f) => /image\/(jpeg|png|webp)/.test(f.type)) ? ['remove-metadata'] : [];
     return one ? ['compress-image', 'resize-image', 'convert-image', 'crop-image', ...metadata, 'images-to-pdf']
       : ['compress-image', 'resize-image', 'convert-image', 'images-to-pdf', ...metadata];
   }
   if ([...kinds].every((k) => k === 'pdf' || k === 'image')) return ['merge-pdf'];
-  if (kinds.size === 1 && kinds.has('text')) {
+  if (only('word')) return ['word-convert', 'office-images', 'hash'];
+  if (only('excel')) return ['excel-convert', 'office-images', 'hash'];
+  if (only('slides')) return ['slides-text', 'office-images', 'hash'];
+  if (only('audio')) return one ? ['audio-trim', 'audio-convert', 'hash'] : ['audio-convert'];
+  if (only('video')) return one ? ['video-to-audio', 'audio-trim', 'hash'] : ['video-to-audio'];
+  if (only('text')) {
     const json = list.some((f) => /\.json$/i.test(f.name) || f.type === 'application/json') ? ['json-formatter'] : [];
+    const csv = list.every((f) => /\.(csv|tsv)$/i.test(f.name)) ? ['csv-to-excel'] : [];
     const diff = list.length === 2 ? ['text-diff'] : [];
-    return [...diff, ...json, 'word-count', 'case-converter', 'clean-lines', 'base64', 'hash'];
+    return [...csv, ...diff, ...json, 'word-count', 'case-converter', 'clean-lines', 'base64', 'hash'];
   }
   return ['hash', 'base64'];
 }
@@ -241,11 +271,11 @@ async function openFiles(list) {
       if (kindOf(f) === 'pdf') {
         try { extra = `, ${plural((await openPdf(f)).pageCount, 'page')}`; } catch { extra = ', can\'t read it'; }
       }
-      line(`  <span class="t-file">${escapeHtml(f.name)}</span>  <span class="t-dim">${KIND_NAME[kindOf(f)]}${extra}, ${formatBytes(f.size)}</span>`);
+      await print(`  <span class="t-file">${escapeHtml(f.name)}</span>  <span class="t-dim">${KIND_NAME[kindOf(f)]}${extra}, ${formatBytes(f.size)}</span>`, 250);
     }
-    if (files.length > 5) line(`  <span class="t-dim">and ${files.length - 5} more</span>`);
-    if (kinds.includes('other')) line('<span class="t-dim">word, excel, powerpoint and audio get more tools later.</span>');
-    line(`<span class="t-ok">${plural(suggestions.length, 'thing')} you can do. pick one ${L.wide ? 'on the left' : 'below'}.</span>`);
+    if (files.length > 5) await print(`  <span class="t-dim">and ${files.length - 5} more</span>`, 250);
+    if (kinds.includes('other')) await print('<span class="t-dim">not much I can do with this one yet. old .doc and .ppt files: save them as .docx or .pptx first.</span>', 400);
+    await print(`<span class="t-ok">${plural(suggestions.length, 'thing')} you can do. pick one ${L.wide ? 'on the left' : 'below'}.</span>`, 0);
     ready();
   });
   drawOptions();
@@ -312,7 +342,7 @@ function openTool(t) {
   if (files.length) handFiles(body);
   say(async () => {
     await command(`tokit ${t.id}${files.length ? ' ' + (files.length === 1 ? quoteName(files[0].name) : `${files.length} files`) : ''}`);
-    line(`<span class="t-dim">${L.wide ? 'ready on the right.' : 'ready.'}</span>`);
+    await print(`<span class="t-dim">${L.wide ? 'ready on the right.' : 'ready.'}</span>`, 0);
     ready();
   });
   show('tool');
@@ -410,6 +440,14 @@ const GERMAN = {
   'timestamp': 'zeitstempel datum',
   'number-base': 'binär zahlensystem',
   'color-converter': 'farbe farbcode umrechnen kontrast',
+  'word-convert': 'word dokument umwandeln pdf text',
+  'excel-convert': 'excel tabelle csv json exportieren',
+  'csv-to-excel': 'csv zu excel tabelle',
+  'slides-text': 'powerpoint folien text notizen',
+  'office-images': 'bilder aus word powerpoint excel herausholen',
+  'audio-trim': 'audio schneiden kürzen klingelton musik',
+  'audio-convert': 'audio umwandeln musik ton',
+  'video-to-audio': 'video zu mp3 ton musik herausholen',
 };
 const haystack = (t) => `${t.name} ${t.desc} ${t.keywords || ''} ${GERMAN[t.id] || ''} ${categoryOf(t).name}`.toLowerCase();
 
@@ -471,12 +509,5 @@ addEventListener('keydown', (e) => {
 document.fonts.ready.then(() => {
   computeLayout();
   route(true);
-  if (view === 'overview' && !reduceMotion) {
-    // One opening move: start close on the terminal, then pull back to the whole sheet
-    const target = viewTarget('overview');
-    Object.assign(cam, { cx: L.T.x + L.T.w / 2, cy: L.T.y + L.T.h / 2 + 40, s: Math.min(1, target.s * 1.6) });
-    applyCamera();
-    setTimeout(() => flyTo(target), 700);
-  }
   intro();
 });
