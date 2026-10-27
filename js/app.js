@@ -95,7 +95,9 @@ function computeLayout() {
     // ...up to whichever comes first, the terminal or the headline
     const freeW = (Math.min(W - m - T.w * S0, W - m - tw * S0) - 2 * m - H * Math.sin(TILT)) / S0;   // the turn pushes the bottom right corner out
     const top = L.overview.cy - H / 2 / S0 - 80, height = H / S0 + 160;
-    L.reel = { x: -m - freeW, y: top, w: freeW, h: height };
+    // Anchored to the screen's left edge on the overview, so on wide screens the gap stays on the right
+    const left = L.overview.cx + (m - W / 2) / S0;
+    L.reel = { x: left, y: top, w: freeW, h: height };
     place(reel, L.reel);
     reel.style.display = '';
     layoutReel();
