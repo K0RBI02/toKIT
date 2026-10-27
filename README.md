@@ -13,15 +13,16 @@ shows what is going on, including every file you save.
 
 ## Tools
 
-- **PDF**: merge, rotate & reorder pages, split, extract pages, images to PDF, PDF to images
+- **PDF**: sign, merge, rotate & reorder pages, split, extract pages, page numbers, watermark, make smaller, PDF to text, PDF to images, images to PDF
+- **Images**: convert, resize, compress, crop & rotate, remove background, read text (OCR, also for scanned PDFs), iPhone photos (HEIC) to JPG, remove photo metadata
 - **Office**: Word to PDF, text or HTML, Excel to CSV or JSON, CSV to Excel, text from slides, images from Office files
-- **Audio**: trim audio, convert audio (MP3, WAV), video to MP3
-- **Images**: convert, resize, compress, crop & rotate, remove photo metadata (GPS, camera, date)
-- **Text & data**: word counter, text case, compare texts, format JSON, Base64, URL encode, checksums, sort & clean lines
-- **Generators**: passwords, UUIDs, colour palettes, random picker, placeholder text, QR codes (links to [QR-Maker](https://github.com/K0RBI02/QR-Maker_) for now)
-- **Converters**: units, currency, time zones, Unix timestamps, number systems, colour formats
+- **Audio & video**: trim audio, convert audio (MP3, WAV), video to MP3, trim a video, video to GIF
+- **Text & files**: word counter, text case, compare texts, format JSON, Base64, URL encode, checksums, sort & clean lines, open a ZIP, make a ZIP
+- **Generators**: QR codes, barcodes, passwords, UUIDs, colour palettes, random picker, placeholder text
+- **Converters**: units, currency, time zones, Unix timestamps, number systems, colour formats, dates, percentages
 
-Tools that don't need a file (passwords, units, …) are not on the canvas yet. Press `Ctrl K` (or `/`) to reach any tool.
+Tools that need a bigger download load it the first time you use them and then run on your device:
+text recognition (about 10 MB), background removal (about 40 MB), HEIC (about 1 MB).
 
 ## Run locally
 
@@ -50,4 +51,5 @@ tool({
 });
 ```
 
-Libraries (pdf-lib, PDF.js, JSZip, SortableJS) load from cdnjs / unpkg only when a tool needs them.
+Libraries load from cdnjs, unpkg, jsDelivr and esm.sh only when a tool needs them.
+Background removal uses [@imgly/background-removal](https://github.com/imgly/background-removal-js), which is licensed under the AGPL.

@@ -304,6 +304,8 @@ const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|log|xml|html?|css|js|ts|ya?ml|
 function kindOf(f) {
   const n = f.name.toLowerCase();
   if (isPdf(f)) return 'pdf';
+  if (/\.(heic|heif)$/.test(n) || /image\/hei[cf]/.test(f.type)) return 'heic';
+  if (/\.zip$/.test(n) || /zip/.test(f.type)) return 'zip';
   if (/\.docx$/.test(n)) return 'word';
   if (/\.(xlsx|xlsm|xls|ods)$/.test(n)) return 'excel';
   if (/\.pptx$/.test(n)) return 'slides';
@@ -313,34 +315,37 @@ function kindOf(f) {
   if (f.type.startsWith('text/') || TEXT_EXT.test(n) || f.type === 'application/json') return 'text';
   return 'other';
 }
-const KIND_NAME = { pdf: 'pdf', word: 'word document', excel: 'spreadsheet', slides: 'presentation', image: 'image', audio: 'audio', video: 'video', text: 'text', other: 'file' };
+const KIND_NAME = { heic: 'iphone photo', zip: 'zip archive', pdf: 'pdf', word: 'word document', excel: 'spreadsheet', slides: 'presentation', image: 'image', audio: 'audio', video: 'video', text: 'text', other: 'file' };
 
 function suggest(list) {
   const kinds = new Set(list.map(kindOf));
   const one = list.length === 1;
   const only = (k) => kinds.size === 1 && kinds.has(k);
+  const pack = one ? [] : ['zip-create'];   // several files can always become one ZIP
   if (only('pdf')) {
-    return one ? ['organize-pdf', 'split-pdf', 'extract-pages', 'pdf-to-images', 'merge-pdf', 'hash']
-      : ['merge-pdf', 'organize-pdf'];
+    return one ? ['sign-pdf', 'organize-pdf', 'split-pdf', 'compress-pdf', 'extract-pages', 'pdf-to-text', 'page-numbers', 'watermark-pdf', 'pdf-to-images', 'merge-pdf', 'ocr', 'hash']
+      : ['merge-pdf', 'organize-pdf', ...pack];
   }
   if (only('image')) {
     const metadata = list.every((f) => /image\/(jpeg|png|webp)/.test(f.type)) ? ['remove-metadata'] : [];
-    return one ? ['compress-image', 'resize-image', 'convert-image', 'crop-image', ...metadata, 'images-to-pdf']
-      : ['compress-image', 'resize-image', 'convert-image', 'images-to-pdf', ...metadata];
+    return one ? ['compress-image', 'resize-image', 'convert-image', 'crop-image', 'remove-background', 'ocr', ...metadata, 'images-to-pdf']
+      : ['compress-image', 'resize-image', 'convert-image', 'images-to-pdf', ...metadata, ...pack];
   }
-  if ([...kinds].every((k) => k === 'pdf' || k === 'image')) return ['merge-pdf'];
-  if (only('word')) return ['word-convert', 'office-images', 'hash'];
-  if (only('excel')) return ['excel-convert', 'office-images', 'hash'];
-  if (only('slides')) return ['slides-text', 'office-images', 'hash'];
-  if (only('audio')) return one ? ['audio-trim', 'audio-convert', 'hash'] : ['audio-convert'];
-  if (only('video')) return one ? ['video-to-audio', 'audio-trim', 'hash'] : ['video-to-audio'];
+  if (only('heic')) return ['heic-to-jpg', ...pack];
+  if (only('zip')) return one ? ['zip-open', 'hash'] : pack;
+  if ([...kinds].every((k) => k === 'pdf' || k === 'image')) return ['merge-pdf', ...pack];
+  if (only('word')) return ['word-convert', 'office-images', 'hash', ...pack];
+  if (only('excel')) return ['excel-convert', 'office-images', 'hash', ...pack];
+  if (only('slides')) return ['slides-text', 'office-images', 'hash', ...pack];
+  if (only('audio')) return one ? ['audio-trim', 'audio-convert', 'hash'] : ['audio-convert', ...pack];
+  if (only('video')) return one ? ['video-trim', 'video-to-gif', 'video-to-audio', 'hash'] : ['video-to-audio', ...pack];
   if (only('text')) {
     const json = list.some((f) => /\.json$/i.test(f.name) || f.type === 'application/json') ? ['json-formatter'] : [];
     const csv = list.every((f) => /\.(csv|tsv)$/i.test(f.name)) ? ['csv-to-excel'] : [];
     const diff = list.length === 2 ? ['text-diff'] : [];
-    return [...csv, ...diff, ...json, 'word-count', 'case-converter', 'clean-lines', 'base64', 'hash'];
+    return [...csv, ...diff, ...json, 'word-count', 'case-converter', 'clean-lines', 'base64', 'hash', ...pack];
   }
-  return ['hash', 'base64'];
+  return one ? ['hash', 'base64', 'zip-create'] : pack;
 }
 let suggestions = [];
 
@@ -640,6 +645,21 @@ const GERMAN = {
   'audio-trim': 'audio schneiden kürzen klingelton musik',
   'audio-convert': 'audio umwandeln musik ton',
   'video-to-audio': 'video zu mp3 ton musik herausholen',
+  'sign-pdf': 'unterschreiben unterschrift signieren vertrag',
+  'page-numbers': 'seitenzahlen nummerieren',
+  'watermark-pdf': 'wasserzeichen stempel',
+  'compress-pdf': 'pdf verkleinern komprimieren kleiner machen',
+  'pdf-to-text': 'pdf zu text kopieren',
+  'heic-to-jpg': 'iphone foto heic umwandeln',
+  'ocr': 'texterkennung text aus bild scan erkennen',
+  'remove-background': 'hintergrund entfernen freistellen',
+  'zip-open': 'zip öffnen entpacken',
+  'zip-create': 'zip erstellen packen',
+  'video-trim': 'video schneiden kürzen',
+  'video-to-gif': 'video zu gif animation',
+  'barcode': 'strichcode ean',
+  'date-calc': 'datum tage zwischen rechner frist',
+  'percent': 'prozent rechner rabatt mehrwertsteuer',
 };
 const haystack = (t) => `${t.name} ${t.desc} ${t.keywords || ''} ${GERMAN[t.id] || ''} ${categoryOf(t).name}`.toLowerCase();
 

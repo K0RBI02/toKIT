@@ -1,0 +1,246 @@
+// More image tools: iPhone photos, reading text from pictures, removing backgrounds.
+// The libraries download once (a few MB, the background model more) and then run on this device.
+
+const HEIC_ACCEPT = '.heic,.heif,image/heic,image/heif';
+const isHeic = (f) => /\.(heic|heif)$/i.test(f.name) || /image\/hei[cf]/.test(f.type);
+
+// ---------- HEIC → JPG ----------
+
+tool({
+  id: 'heic-to-jpg',
+  cat: 'image',
+  name: 'iPhone photos to JPG',
+  desc: 'Turn HEIC photos from an iPhone into normal JPGs.',
+  intro: 'iPhones save photos as HEIC, which many apps and websites can\'t open. This makes JPGs out of them.',
+  keywords: 'heic heif iphone ios apple photo to jpg jpeg convert',
+  mount(root) {
+    const { work, side } = layout(root);
+    let items = [];
+    const list = h('div', { class: 'list' });
+    const quality = rangeField('Quality', { min: 50, max: 100, value: 90 });
+    const zone = dropzone({
+      accept: HEIC_ACCEPT,
+      title: 'Drop iPhone photos here',
+      hint: '.heic or .heif files, as many as you like',
+      onFiles: (files) => {
+        items.push(...files.map((file) => ({ file, out: null, url: null, error: null })));
+        draw();
+        convertAll();
+      },
+    });
+    let running = Promise.resolve();
+    function convertAll() {
+      running = running.then(async () => {
+        await need('heic');
+        for (const it of items) {
+          if (it.out || it.error) continue;
+          try {
+            const res = await heic2any({ blob: it.file, toType: 'image/jpeg', quality: quality.input.value / 100 });
+            it.out = Array.isArray(res) ? res[0] : res;
+            it.url = URL.createObjectURL(it.out);
+          } catch {
+            it.error = 'Could not read this photo';
+          }
+          draw();
+        }
+      }).catch((err) => toast(err.message));
+      return running;
+    }
+    quality.input.addEventListener('change', () => {
+      items.forEach((it) => { it.out = null; it.error = null; });
+      draw();
+      convertAll();
+    });
+    const name = (it) => `${baseName(it.file.name)}.jpg`;
+    const go = button('Download', () => busy(go, async () => {
+      await running;
+      const done = items.filter((it) => it.out);
+      if (done.length === 1) downloadBlob(done[0].out, name(done[0]));
+      else await downloadZip(done.map((it) => ({ name: name(it), blob: it.out })), 'photos.zip');
+    }), 'primary');
+    function draw() {
+      list.replaceChildren(...items.map((it) => h('div', { class: 'list-item' },
+        it.url ? h('img', { class: 'thumb', alt: '', src: it.url }) : h('div', { class: 'thumb' }),
+        h('div', { class: 'meta' },
+          h('strong', {}, it.file.name),
+          h('span', { class: it.error ? 'worse' : '' }, it.error || (it.out ? `${formatBytes(it.file.size)} to ${formatBytes(it.out.size)} JPG` : 'Converting…')),
+        ),
+        it.out ? iconBtn('download', `Download ${name(it)}`, () => downloadBlob(it.out, name(it))) : null,
+      )));
+      const n = items.filter((it) => it.out).length;
+      go.disabled = !n;
+      go.textContent = n > 1 ? `Download ${n} JPGs (zip)` : 'Download JPG';
+      zone.compact(items.length > 0, 'Add more photos');
+    }
+    work.append(list, zone);
+    side.append(quality, h('p', { class: 'note' }, 'The converter (about 1 MB) loads the first time you use it.'), actions(go));
+    draw();
+  },
+});
+
+// ---------- Text recognition ----------
+
+const OCR_LANGS = [['eng', 'English'], ['deu', 'German'], ['eng+deu', 'Both']];
+
+tool({
+  id: 'ocr',
+  cat: 'image',
+  name: 'Read text from images',
+  desc: 'Get the text out of photos, screenshots and scanned PDFs.',
+  intro: 'Text recognition (OCR) right on your device. Sharp, straight pictures work best.',
+  keywords: 'ocr text recognition read scan screenshot photo copy text from image picture scanned pdf',
+  mount(root) {
+    const { work, side } = layout(root);
+    let file = null, worker = null, workerLang = null;
+    const out = textArea({ readonly: true, placeholder: 'The recognised text shows up here.', style: { minHeight: '320px' } });
+    const preview = h('img', { class: 'ocr-preview', alt: '', hidden: true });
+    const status = h('p', { class: 'note' }, 'Add a picture or a scanned PDF.');
+    const lang = segmented(OCR_LANGS, 'eng+deu', () => file && run(), 'Language');
+    const zone = dropzone({
+      accept: `image/*,${PDF_ACCEPT}`,
+      multiple: false,
+      title: 'Drop a picture or scan here',
+      hint: 'PNG, JPG, a screenshot, or a scanned PDF. Pasting works too.',
+      onFiles: ([f]) => {
+        file = f;
+        if (preview.src) URL.revokeObjectURL(preview.src);
+        preview.hidden = isPdf(f);
+        if (!isPdf(f)) preview.src = URL.createObjectURL(f);
+        zone.compact(true, `${f.name}. Drop another to replace it.`);
+        run();
+      },
+    });
+
+    async function getWorker(progress) {
+      await need('tesseract');
+      if (worker && workerLang === lang.value) return worker;
+      if (worker) await worker.terminate();
+      worker = await Tesseract.createWorker(lang.value.split('+'), 1, { logger: progress });
+      workerLang = lang.value;
+      return worker;
+    }
+
+    let runId = 0;
+    async function run() {
+      const id = ++runId;
+      out.value = '';
+      [save, copy].forEach((b) => (b.disabled = true));
+      const say = (t) => { if (id === runId) status.textContent = t; };
+      try {
+        const w = await getWorker((m) => {
+          if (m.status === 'recognizing text') say(`Reading… ${Math.round(m.progress * 100)}%`);
+          else if (/load|initializ/.test(m.status)) say('Loading text recognition (about 10 MB, only the first time)…');
+        });
+        let pages = [];
+        if (isPdf(file)) {
+          const src = await openPdf(file);
+          for (let i = 0; i < src.pageCount; i++) {
+            say(`Reading page ${i + 1} of ${src.pageCount}…`);
+            const canvas = await renderPage(src, i, 1600);
+            pages.push((await w.recognize(canvas)).data.text.trim());
+            if (id !== runId) return;
+          }
+        } else {
+          pages = [(await w.recognize(file)).data.text.trim()];
+        }
+        if (id !== runId) return;
+        out.value = pages.length > 1 ? pages.map((p, i) => `--- Page ${i + 1} ---\n${p}`).join('\n\n') : pages[0];
+        const words = (out.value.match(/[\p{L}\p{N}]+/gu) || []).length;
+        say(words ? `${plural(words, 'word')} found. Check names and numbers, OCR makes mistakes.` : 'No text found in this picture.');
+        [save, copy].forEach((b) => (b.disabled = !words));
+      } catch (err) {
+        console.error(err);
+        say('Text recognition could not start. Check your connection and try again.');
+      }
+    }
+    const save = button('Download .txt', () => downloadBlob(new Blob([out.value], { type: 'text/plain' }), `${baseName(file.name)}.txt`), 'primary');
+    const copy = button('Copy text', () => copyText(out.value, 'Text copied'));
+    work.append(zone, preview, out);
+    side.append(field('Language', lang), status, actions(save, copy));
+    [save, copy].forEach((b) => (b.disabled = true));
+    return () => { runId++; worker?.terminate(); };
+  },
+});
+
+// ---------- Remove background ----------
+
+tool({
+  id: 'remove-background',
+  cat: 'image',
+  name: 'Remove background',
+  desc: 'Cut out people, products or pets from a photo.',
+  intro: 'An AI model on your device finds the subject and removes the rest. The first time it downloads the model (about 40 MB).',
+  keywords: 'remove background cut out transparent png freistellen product photo portrait ai',
+  mount(root) {
+    const { work, side } = layout(root);
+    let file = null, cut = null, cutUrl = null;
+    const before = h('img', { alt: 'Original' });
+    const after = h('img', { alt: 'Without background' });
+    const compare = h('div', { class: 'bg-compare', hidden: true }, h('figure', {}, before, h('figcaption', {}, 'Before')), h('figure', { class: 'is-cut' }, after, h('figcaption', {}, 'After')));
+    const status = h('p', { class: 'note' }, 'Add a photo to start.');
+    const BG = { none: null, white: '#ffffff', black: '#111110' };
+    const bg = segmented([['none', 'Transparent'], ['white', 'White'], ['black', 'Black'], ['custom', 'Colour']], 'none', paint, 'Background');
+    const custom = h('input', { type: 'color', value: '#FFE1CC', oninput: () => { bg.set('custom', true); } });
+    const zone = dropzone({
+      accept: 'image/jpeg,image/png,image/webp',
+      multiple: false,
+      title: 'Drop a photo here',
+      hint: 'JPG, PNG or WebP',
+      onFiles: async ([f]) => {
+        file = f;
+        cut = null;
+        if (before.src) URL.revokeObjectURL(before.src);
+        before.src = URL.createObjectURL(f);
+        after.removeAttribute('src');
+        compare.hidden = false;
+        compare.classList.add('is-working');
+        zone.compact(true, `${f.name}. Drop another to replace it.`);
+        update();
+        try {
+          const { removeBackground } = await needModule('bgremoval');
+          cut = await removeBackground(f, {
+            progress: (key, current, total) => {
+              if (/fetch/.test(key)) status.textContent = `Downloading the model… ${Math.round((current / total) * 100)}%`;
+              else status.textContent = 'Finding the subject…';
+            },
+          });
+          if (file !== f) return;
+          status.textContent = 'Done. Pick a background, then save.';
+          paint();
+        } catch (err) {
+          console.error(err);
+          status.textContent = 'This did not work. Check your connection, or try a smaller photo.';
+        } finally {
+          compare.classList.remove('is-working');
+          update();
+        }
+      },
+    });
+    // The cut-out on the chosen background
+    async function render() {
+      const img = await loadImage(cut);
+      const c = h('canvas', { width: img.naturalWidth, height: img.naturalHeight });
+      const g = c.getContext('2d');
+      const color = bg.value === 'custom' ? custom.value : BG[bg.value];
+      if (color) { g.fillStyle = color; g.fillRect(0, 0, c.width, c.height); }
+      g.drawImage(img, 0, 0);
+      URL.revokeObjectURL(img.src);
+      return canvasToBlob(c, color ? 'image/jpeg' : 'image/png', 0.92);
+    }
+    async function paint() {
+      if (!cut) return;
+      if (cutUrl) URL.revokeObjectURL(cutUrl);
+      cutUrl = URL.createObjectURL(await render());
+      after.src = cutUrl;
+    }
+    const go = button('Save image', () => busy(go, async () => {
+      const blob = await render();
+      downloadBlob(blob, `${baseName(file.name)}-cutout.${blob.type === 'image/png' ? 'png' : 'jpg'}`);
+    }), 'primary');
+    function update() { go.disabled = !cut; }
+    work.append(zone, compare);
+    side.append(status, field('Background', bg), field('Own colour', h('div', { class: 'row' }, custom, h('span', { class: 'note' }, 'Click to pick'))), actions(go));
+    update();
+    return () => { if (cutUrl) URL.revokeObjectURL(cutUrl); };
+  },
+});

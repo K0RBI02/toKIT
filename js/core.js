@@ -166,7 +166,26 @@ const LIBS = {
   mammoth: 'https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js',
   xlsx: 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
   lame: 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js',
+  heic: 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js',
+  tesseract: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js',
+  qrcode: 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
+  barcode: 'https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js',
 };
+
+// ES modules, for libraries that only ship that way
+const MODULES = {
+  bgremoval: 'https://esm.sh/@imgly/background-removal@1.4.5',
+  gifenc: 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm',
+};
+const modules = {};
+function needModule(name) {
+  modules[name] ||= import(MODULES[name]).catch((err) => {
+    delete modules[name];
+    console.error(err);
+    throw new Error('Could not load a part of this tool. Check your connection and try again.');
+  });
+  return modules[name];
+}
 const loaded = {};
 function need(...names) {
   return Promise.all(names.map((name) => {

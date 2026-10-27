@@ -281,13 +281,3 @@ tool({
     generate();
   },
 });
-
-// QR codes live in QR-Maker until it moves in here
-tool({
-  id: 'qr',
-  cat: 'generate',
-  name: 'QR codes',
-  desc: 'Turn a link or text into a QR code.',
-  keywords: 'qr code generator link barcode',
-  href: 'https://k0rbi02.github.io/QR-Maker_/',
-});
