@@ -587,6 +587,13 @@ function route(instant = false) {
 }
 addEventListener('hashchange', () => route());
 
+// Inside k0rbi02.github.io (clicking "tools" there flies down to toKIT): a way back up to the portfolio
+const homePill = $('#home-pill');
+if (window.parent !== window) {
+  homePill.hidden = false;
+  homePill.addEventListener('click', () => parent.postMessage('tokit:back', location.origin));
+}
+
 backPill.addEventListener('click', () => {
   if (view === 'tool' && files.length) location.hash = '#/open';
   else {

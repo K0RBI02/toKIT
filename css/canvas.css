@@ -353,6 +353,7 @@ body[data-view="options"] .card { animation: card-in .45s cubic-bezier(.2, .8, .
   .hud .github-pill span, .site-footer .footer-long { display: none; }
   /* The back button needs the room once you are past the start */
   body:not([data-view="overview"]) .site-footer { display: none; }
+  body:not([data-view="overview"]) #home-pill span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
