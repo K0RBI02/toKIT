@@ -168,7 +168,7 @@ body { overscroll-behavior: none; }
 .reel {
   position: absolute;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
   column-gap: calc(var(--col, 160px) * 0.14);
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
@@ -183,7 +183,7 @@ body { overscroll-behavior: none; }
   animation: reel-up var(--dur, 60s) linear infinite;
   will-change: transform;
 }
-.reel-col:nth-child(2) .reel-track { animation-name: reel-down; }
+.reel-col:nth-child(even) .reel-track { animation-name: reel-down; }   /* every other column runs the other way */
 @keyframes reel-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
 @keyframes reel-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
 .reel:hover .reel-track, .reel:focus-within .reel-track, .reel.is-frozen .reel-track { animation-play-state: paused; }

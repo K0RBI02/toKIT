@@ -191,7 +191,7 @@ function show(name, instant) {
 const PROMPT = '<span class="t-user">you@tokit</span>:<span class="t-path">~</span>$ ';
 const cursor = h('span', { class: 'cursor' });
 let typing = Promise.resolve();
-let hurry = false;     // set by a click or key during the first-visit intro
+let hurry = false;     // set by a drop, so the terminal finishes what it is typing at once
 
 function line(html = '') {
   const el = h('div', { html });
@@ -352,7 +352,6 @@ let suggestions = [];
 // The big moment: the file lands in the terminal, then the camera swings over to the options
 async function openFiles(list) {
   if (!list.length) return;
-  skipIntro();
   // Whatever the terminal is still typing finishes at once, so a drop never waits
   hurry = true;
   typing.then(() => { hurry = false; });
@@ -429,15 +428,17 @@ function sizeCards() {
   cards.style.setProperty('--cols', bestCols);
 }
 
-// ---------- Tool reel: every tool scrolling by in three columns on the overview ----------
+// ---------- Tool reel: every tool scrolling by in columns on the overview ----------
 // Each column holds its share of the tools twice, so moving it by half its height loops seamlessly.
+// As many columns as the free space takes at a comfortable width: 3 at least, 6 at most.
 
-const REEL_SPEEDS = [22, 17, 26];   // px per second at 100 %, one per column so they drift apart
+const REEL_SPEEDS = [22, 17, 26, 19, 24, 15];   // px per second at 100 %, one per column so they drift apart
+const REEL_COL = 210;                           // a comfortable column width, world px
 
-function buildReel() {
+function buildReel(n) {
   const tools = TOOLS.filter((t) => !t.href);
-  const cols = [[], [], []];
-  tools.forEach((t, i) => cols[i % 3].push(t));
+  const cols = Array.from({ length: n }, () => []);
+  tools.forEach((t, i) => cols[i % n].push(t));
   const card = (t, copy) => h('a', {
     class: 'card reel-card',
     href: `#/${t.id}`,
@@ -451,8 +452,10 @@ function buildReel() {
 }
 
 function layoutReel() {
-  if (!reel.firstChild) buildReel();
-  const col = L.reel.w / (3 + 2 * 0.14);
+  const n = clamp(Math.floor(L.reel.w / REEL_COL), 3, 6);
+  if (reel.children.length !== n) buildReel(n);
+  const col = L.reel.w / (n + (n - 1) * 0.14);
+  reel.style.setProperty('--cols', n);
   reel.style.setProperty('--col', `${col}px`);
   reel.style.setProperty('--tile', `${Math.round(Math.min(col * 0.62, 170))}px`);
   reel.querySelectorAll('.reel-track').forEach((track, i) => {
@@ -730,43 +733,15 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------- Start ----------
-// First visit: start at 100 % on the terminal, type, then pull back askew to show the whole sheet.
-// Later visits (and reduced motion) start on the overview straight away. Any key, click or drop skips.
-
-const SEEN = 'tokit:seen';
-const firstVisit = (() => { try { return !localStorage.getItem(SEEN); } catch { return false; } })();
-let introRunning = false;
-function skipIntro() {
-  if (!introRunning) return;
-  introRunning = false;
-  hurry = true;
-  if (view === 'overview') flyTo(viewTarget('overview'), true);
-  typing.then(() => { hurry = false; });
-}
+// Straight onto the overview; the terminal types its help while you look around
 
 function start() {
   computeLayout();
   route(true);
-  if (view !== 'overview' || !firstVisit || reduceMotion) {
-    say(async () => {
-      ready();
-      await sleep(700);
-      await command('tokit --help');
-      await printHelp();
-    });
-    return;
-  }
-  try { localStorage.setItem(SEEN, '1'); } catch { /* private mode: the intro just plays again next time */ }
-  introRunning = true;
-  const { T } = L;
-  Object.assign(cam, { cx: T.x + T.w / 2, cy: T.y + T.h / 2, s: 1, a: 0 });
-  applyCamera();
-  ['pointerdown', 'keydown', 'wheel'].forEach((ev) => addEventListener(ev, skipIntro, { once: true, passive: true }));
   say(async () => {
     ready();
-    await sleep(400);
-    await command('tokit --help', 55);
-    if (introRunning) flyTo(viewTarget('overview')).then(() => { introRunning = false; });
+    await sleep(700);
+    await command('tokit --help');
     await printHelp();
   });
 }
