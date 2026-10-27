@@ -174,7 +174,6 @@ const LIBS = {
 
 // ES modules, for libraries that only ship that way
 const MODULES = {
-  bgremoval: 'https://esm.sh/@imgly/background-removal@1.4.5',
   gifenc: 'https://cdn.jsdelivr.net/npm/gifenc@1.0.3/+esm',
 };
 const modules = {};

@@ -1,5 +1,5 @@
-// More image tools: iPhone photos, reading text from pictures, removing backgrounds.
-// The libraries download once (a few MB, the background model more) and then run on this device.
+// More image tools: iPhone photos and reading text from pictures.
+// The libraries download once (a few MB) and then run on this device.
 
 const HEIC_ACCEPT = '.heic,.heif,image/heic,image/heif';
 const isHeic = (f) => /\.(heic|heif)$/i.test(f.name) || /image\/hei[cf]/.test(f.type);
@@ -159,88 +159,5 @@ tool({
     side.append(field('Language', lang), status, actions(save, copy));
     [save, copy].forEach((b) => (b.disabled = true));
     return () => { runId++; worker?.terminate(); };
-  },
-});
-
-// ---------- Remove background ----------
-
-tool({
-  id: 'remove-background',
-  cat: 'image',
-  name: 'Remove background',
-  desc: 'Cut out people, products or pets from a photo.',
-  intro: 'An AI model on your device finds the subject and removes the rest. The first time it downloads the model (about 40 MB).',
-  keywords: 'remove background cut out transparent png freistellen product photo portrait ai',
-  mount(root) {
-    const { work, side } = layout(root);
-    let file = null, cut = null, cutUrl = null;
-    const before = h('img', { alt: 'Original' });
-    const after = h('img', { alt: 'Without background' });
-    const compare = h('div', { class: 'bg-compare', hidden: true }, h('figure', {}, before, h('figcaption', {}, 'Before')), h('figure', { class: 'is-cut' }, after, h('figcaption', {}, 'After')));
-    const status = h('p', { class: 'note' }, 'Add a photo to start.');
-    const BG = { none: null, white: '#ffffff', black: '#111110' };
-    const bg = segmented([['none', 'Transparent'], ['white', 'White'], ['black', 'Black'], ['custom', 'Colour']], 'none', paint, 'Background');
-    const custom = h('input', { type: 'color', value: '#FFE1CC', oninput: () => { bg.set('custom', true); } });
-    const zone = dropzone({
-      accept: 'image/jpeg,image/png,image/webp',
-      multiple: false,
-      title: 'Drop a photo here',
-      hint: 'JPG, PNG or WebP',
-      onFiles: async ([f]) => {
-        file = f;
-        cut = null;
-        if (before.src) URL.revokeObjectURL(before.src);
-        before.src = URL.createObjectURL(f);
-        after.removeAttribute('src');
-        compare.hidden = false;
-        compare.classList.add('is-working');
-        zone.compact(true, `${f.name}. Drop another to replace it.`);
-        update();
-        try {
-          const { removeBackground } = await needModule('bgremoval');
-          cut = await removeBackground(f, {
-            progress: (key, current, total) => {
-              if (/fetch/.test(key)) status.textContent = `Downloading the model… ${Math.round((current / total) * 100)}%`;
-              else status.textContent = 'Finding the subject…';
-            },
-          });
-          if (file !== f) return;
-          status.textContent = 'Done. Pick a background, then save.';
-          paint();
-        } catch (err) {
-          console.error(err);
-          status.textContent = 'This did not work. Check your connection, or try a smaller photo.';
-        } finally {
-          compare.classList.remove('is-working');
-          update();
-        }
-      },
-    });
-    // The cut-out on the chosen background
-    async function render() {
-      const img = await loadImage(cut);
-      const c = h('canvas', { width: img.naturalWidth, height: img.naturalHeight });
-      const g = c.getContext('2d');
-      const color = bg.value === 'custom' ? custom.value : BG[bg.value];
-      if (color) { g.fillStyle = color; g.fillRect(0, 0, c.width, c.height); }
-      g.drawImage(img, 0, 0);
-      URL.revokeObjectURL(img.src);
-      return canvasToBlob(c, color ? 'image/jpeg' : 'image/png', 0.92);
-    }
-    async function paint() {
-      if (!cut) return;
-      if (cutUrl) URL.revokeObjectURL(cutUrl);
-      cutUrl = URL.createObjectURL(await render());
-      after.src = cutUrl;
-    }
-    const go = button('Save image', () => busy(go, async () => {
-      const blob = await render();
-      downloadBlob(blob, `${baseName(file.name)}-cutout.${blob.type === 'image/png' ? 'png' : 'jpg'}`);
-    }), 'primary');
-    function update() { go.disabled = !cut; }
-    work.append(zone, compare);
-    side.append(status, field('Background', bg), field('Own colour', h('div', { class: 'row' }, custom, h('span', { class: 'note' }, 'Click to pick'))), actions(go));
-    update();
-    return () => { if (cutUrl) URL.revokeObjectURL(cutUrl); };
   },
 });

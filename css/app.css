@@ -635,20 +635,9 @@ input[type="color"] { width: 40px; height: 40px; padding: 0; border: 0; backgrou
 .num-label[data-pos="tr"] { right: 5%; top: 5%; }
 .wm-label { position: absolute; left: 50%; top: 50%; font: 700 48px Helvetica, Arial, sans-serif; line-height: 1; white-space: nowrap; pointer-events: none; }
 
-/* ---------- OCR, background removal ---------- */
+/* ---------- OCR ---------- */
 
 .ocr-preview { max-width: 100%; max-height: 260px; justify-self: start; border-radius: var(--radius-sm); box-shadow: 0 12px 32px -16px rgba(17,17,16,.4); }
-.bg-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.bg-compare figure { margin: 0; display: grid; gap: 8px; }
-.bg-compare img { width: 100%; aspect-ratio: 1; object-fit: contain; border-radius: var(--radius-sm); background: var(--sunken); }
-.bg-compare figcaption { font-size: 13px; color: var(--ink-soft); }
-/* Checkerboard so you can see what became transparent */
-.bg-compare .is-cut img {
-  background: repeating-conic-gradient(#e8e6e1 0 25%, #fff 0 50%) 0 0 / 20px 20px;
-}
-.bg-compare.is-working .is-cut img { animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: .5; } }
-@media (max-width: 600px) { .bg-compare { grid-template-columns: 1fr; } }
 
 /* ---------- QR and barcodes ---------- */
 

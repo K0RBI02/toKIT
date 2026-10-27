@@ -14,7 +14,7 @@ shows what is going on, including every file you save.
 ## Tools
 
 - **PDF**: sign, merge, rotate & reorder pages, split, extract pages, page numbers, watermark, make smaller, PDF to text, PDF to images, images to PDF
-- **Images**: convert, resize, compress, crop & rotate, remove background, read text (OCR, also for scanned PDFs), iPhone photos (HEIC) to JPG, remove photo metadata
+- **Images**: convert, resize, compress, crop & rotate, read text (OCR, also for scanned PDFs), iPhone photos (HEIC) to JPG, remove photo metadata
 - **Office**: Word to PDF, text or HTML, Excel to CSV or JSON, CSV to Excel, text from slides, images from Office files
 - **Audio & video**: trim audio, convert audio (MP3, WAV), video to MP3, trim a video, video to GIF
 - **Text & files**: word counter, text case, compare texts, format JSON, Base64, URL encode, checksums, sort & clean lines, open a ZIP, make a ZIP
@@ -22,7 +22,7 @@ shows what is going on, including every file you save.
 - **Converters**: units, currency, time zones, Unix timestamps, number systems, colour formats, dates, percentages
 
 Tools that need a bigger download load it the first time you use them and then run on your device:
-text recognition (about 10 MB), background removal (about 40 MB), HEIC (about 1 MB).
+text recognition (about 10 MB) and HEIC (about 1 MB).
 
 ## Run locally
 
@@ -52,4 +52,3 @@ tool({
 ```
 
 Libraries load from cdnjs, unpkg, jsDelivr and esm.sh only when a tool needs them.
-Background removal uses [@imgly/background-removal](https://github.com/imgly/background-removal-js), which is licensed under the AGPL.

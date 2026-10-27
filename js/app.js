@@ -328,7 +328,7 @@ function suggest(list) {
   }
   if (only('image')) {
     const metadata = list.every((f) => /image\/(jpeg|png|webp)/.test(f.type)) ? ['remove-metadata'] : [];
-    return one ? ['compress-image', 'resize-image', 'convert-image', 'crop-image', 'remove-background', 'ocr', ...metadata, 'images-to-pdf']
+    return one ? ['compress-image', 'resize-image', 'convert-image', 'crop-image', 'ocr', ...metadata, 'images-to-pdf']
       : ['compress-image', 'resize-image', 'convert-image', 'images-to-pdf', ...metadata, ...pack];
   }
   if (only('heic')) return ['heic-to-jpg', ...pack];
@@ -652,7 +652,6 @@ const GERMAN = {
   'pdf-to-text': 'pdf zu text kopieren',
   'heic-to-jpg': 'iphone foto heic umwandeln',
   'ocr': 'texterkennung text aus bild scan erkennen',
-  'remove-background': 'hintergrund entfernen freistellen',
   'zip-open': 'zip öffnen entpacken',
   'zip-create': 'zip erstellen packen',
   'video-trim': 'video schneiden kürzen',
