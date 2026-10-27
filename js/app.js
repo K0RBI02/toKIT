@@ -1,8 +1,8 @@
 // toKIT canvas: a camera over one big sheet of grid paper, like k0rbi02.github.io.
 //
-//   overview   free space left, terminal top right, headline bottom right (zoomed out)
-//   options    #/open: zoomed in on the free space, which shows what you can do with the file
-//   tool       #/<tool-id>: the camera moves past the terminal to the tool on its right
+//   overview   askew and zoomed out: the workflow sketch on the left, terminal top right, headline bottom right
+//   options    #/open: the desk straightens out at 100 %, the left half shows what you can do with the file
+//   tool       #/<tool-id>: the tool takes the place of the options, the terminal stays on the right
 
 const $ = (sel) => document.querySelector(sel);
 const world = $('#world');
@@ -10,7 +10,10 @@ const gridFine = $('#grid-fine');
 const gridCoarse = $('#grid-coarse');
 const terminal = $('#terminal');
 const termBody = $('#terminal-body');
+const selection = $('#selection');
 const title = $('#big-title');
+const flow = $('#flow');
+const korbi = $('#korbi');
 const optionsEl = $('#options');
 const toolEl = $('#tool');
 const zoomPill = $('#zoom-pill');
@@ -26,9 +29,11 @@ let L = null;          // layout in world pixels
 
 // ---------- Layout ----------
 // At zoom 100 % one world pixel is one screen pixel, so options and tools are laid out at real size.
+// The overview is a composed screen at zoom S0, turned by TILT: terminal in the top right corner,
+// headline (kept straight on screen) in the bottom right corner, the workflow sketch on the left.
 
-// The overview is a composed screen at zoom S0: terminal in the top right corner, headline in the
-// bottom right corner, free space on the left. Zooming in to 100 % on that free space shows the options.
+const deg = Math.PI / 180;
+
 function computeLayout() {
   const W = innerWidth, H = innerHeight;
   const wide = W >= 760;
@@ -36,61 +41,87 @@ function computeLayout() {
   const hud = 72;
   const regionH = H - 2 * m - hud;
   const S0 = wide ? 0.78 : 0.8;
-  let T, O, R;
+  const TILT = (wide ? 3 : 2) * deg;
+  let T, O, R, K = 0;
   if (wide) {
     const tw = Math.round(clamp(W * 0.4, 380, 640));
     T = { x: 0, y: 0, w: tw, h: Math.round(tw * 0.64) };
+    // Room above the terminal for Korbi to sit on it, as far as the screen allows
+    K = Math.round(Math.min(tw * 0.34, regionH - T.h));
+    if (K < 90) K = 0;
     const sideW = W - 3 * m - tw;
-    O = { x: -m - sideW, y: 0, w: sideW, h: regionH };
-    R = { x: tw + m, y: 0, w: sideW, h: regionH };
+    O = { x: -m - sideW, y: -K, w: sideW, h: regionH };
+    R = O;   // the tool takes the place of the options
   } else {
     const tw = W - 2 * m;
     T = { x: 0, y: 0, w: tw, h: Math.round(Math.min(tw * 0.62, 230)) };
     O = { x: 0, y: T.h + 2 * m, w: tw, h: H - T.h - 4 * m - hud };
     R = { x: 0, y: H + 2 * m, w: tw, h: regionH };
   }
-  L = { W, H, m, hud, wide, T, O, R, S0 };
+  L = { W, H, m, hud, wide, T, O, R, K, S0, TILT };
 
   const place = (el, r) => Object.assign(el.style, { left: `${r.x}px`, top: `${r.y}px`, width: `${r.w}px`, height: `${r.h}px` });
   place(terminal, T);
+  place(selection, T);
   place(optionsEl, O);
   place(toolEl, R);
 
-  // Overview camera: the terminal's top right corner sits in the screen's top right corner
-  L.overview = { cx: T.x + T.w - (W / 2 - m) / S0, cy: T.y + (H / 2 - m) / S0, s: S0 };
+  // Overview camera: solve for the centre so the terminal's top right corner lands near the screen's
+  // top right corner after the turn (its top left corner rises by w·sin, so leave room for that)
+  const turn = (x, y, a) => [x * Math.cos(a) - y * Math.sin(a), x * Math.sin(a) + y * Math.cos(a)];
+  const toWorld = (sx, sy, cam) => {
+    const [dx, dy] = turn((sx - W / 2) / cam.s, (sy - H / 2) / cam.s, -cam.a);
+    return [cam.cx + dx, cam.cy + dy];
+  };
+  const Q = [W - m, m + T.w * S0 * Math.sin(TILT) + 4];
+  const [qx, qy] = turn((Q[0] - W / 2) / S0, (Q[1] - H / 2) / S0, -TILT);
+  L.overview = { cx: T.x + T.w - qx, cy: T.y - qy, s: S0, a: TILT };
 
-  // Headline: as big as fits between the terminal and the HUD, its bottom right in the screen's corner
+  // Headline: as big as fits between the terminal and the HUD, straight on screen, bottom right
+  title.style.transform = 'none';
   title.style.fontSize = '100px';
   const unitW = title.offsetWidth / 100, unitH = title.offsetHeight / 100;
-  const roomH = (H - hud - m - (m + T.h * S0 + m * 1.5)) / S0;
-  const roomW = (W * (wide ? 0.58 : 1) - 2 * m) / S0;
-  const F = Math.floor(Math.min(roomH / unitH, roomW / unitW));
+  const termBottom = Q[1] + T.h * S0 * Math.cos(TILT);
+  const roomH = H - hud - m - termBottom - m * 1.5;
+  const roomW = W * (wide ? 0.58 : 1) - 2 * m;
+  const F = Math.floor(Math.min(roomH / (unitH * S0), roomW / (unitW * S0)));
   title.style.fontSize = `${F}px`;
   const tw = title.offsetWidth, th = title.offsetHeight;
-  const bottom = L.overview.cy + (H / 2 - hud - m) / S0;
-  L.title = { x: T.x + T.w - tw, y: bottom - th, w: tw, h: th };
-  Object.assign(title.style, { left: `${L.title.x}px`, top: `${L.title.y}px` });
+  const [wx, wy] = toWorld(W - m - (tw * S0) / 2, H - hud - m - (th * S0) / 2, L.overview);
+  Object.assign(title.style, { left: `${wx - tw / 2}px`, top: `${wy - th / 2}px`, transform: `rotate(${-TILT}rad)` });
+
+  // Workflow sketch: in the free space left of the terminal, level with it
+  const fw = Math.min(wide ? (W - 3 * m) / S0 - T.w - m * 2 : T.w, wide ? T.w * 1.15 : T.w);
+  Object.assign(flow.style, wide
+    ? { left: `${-m * 2 - fw}px`, top: `${T.h * 0.12}px`, width: `${fw}px`, display: '' }
+    : { display: 'none' });
+
+  // Korbi sits on the terminal's top edge, a bit right of centre, legs over the edge
+  if (K) Object.assign(korbi.style, { height: `${K}px`, left: `${T.x + T.w * 0.56}px`, top: `${T.y - K * 0.9}px`, display: '' });
+  else korbi.style.display = 'none';
 
   sizeCards();
 }
 
 function viewTarget(name) {
-  const { W, H, m, T, O, R } = L;
-  if (name === 'options') return { cx: (L.wide ? O.x : T.x) - m + W / 2, cy: -m + H / 2, s: 1 };
-  if (name === 'tool') return { cx: (L.wide ? T.x : R.x) - m + W / 2, cy: R.y - m + H / 2, s: 1 };
+  const { W, H, m, O, R } = L;
+  if (name === 'options' || (name === 'tool' && L.wide)) return { cx: O.x - m + W / 2, cy: (L.wide ? O.y : L.T.y) - m + H / 2, s: 1, a: 0 };
+  if (name === 'tool') return { cx: R.x - m + W / 2, cy: R.y - m + H / 2, s: 1, a: 0 };
   return L.overview;
 }
 
 // ---------- Camera ----------
 
-const cam = { cx: 0, cy: 0, s: 1 };
+const cam = { cx: 0, cy: 0, s: 1, a: 0 };
 let goal = null;
 let moving = false;
 
 function applyCamera() {
   const { W, H } = L;
-  world.style.transform = `translate(${W / 2}px, ${H / 2}px) scale(${cam.s.toFixed(4)}) translate(${(-cam.cx).toFixed(2)}px, ${(-cam.cy).toFixed(2)}px)`;
-  // The grid follows the camera; below ~70 % a coarser grid takes over so cells never get tiny
+  world.style.transform = `translate(${W / 2}px, ${H / 2}px) rotate(${cam.a.toFixed(5)}rad) scale(${cam.s.toFixed(4)}) translate(${(-cam.cx).toFixed(2)}px, ${(-cam.cy).toFixed(2)}px)`;
+  world.style.setProperty('--inv', (1 / cam.s).toFixed(4));
+  // The grid follows the camera's move and zoom but not its turn, like the portfolio.
+  // Below ~70 % a coarser grid takes over so cells never get tiny.
   const ox = W / 2 - cam.cx * cam.s - 1, oy = H / 2 - cam.cy * cam.s - 1;
   [[gridFine, GRID], [gridCoarse, GRID * 2]].forEach(([el, size]) => {
     const px = size * cam.s;
@@ -108,37 +139,42 @@ function flyTo(target, instant = reduceMotion) {
   if (instant) {
     Object.assign(cam, target);
     applyCamera();
-    return;
+    return Promise.resolve();
   }
-  if (moving) return;
-  moving = true;
-  let last = performance.now();
-  (function tick(now) {
-    // Ease out, zooming on a log scale so zoom in and zoom out feel the same
-    const k = 1 - Math.pow(1 - 0.075, Math.min(4, (now - last) / 16.7));
-    last = now;
-    cam.s = Math.exp(Math.log(cam.s) + (Math.log(goal.s) - Math.log(cam.s)) * k);
-    cam.cx += (goal.cx - cam.cx) * k;
-    cam.cy += (goal.cy - cam.cy) * k;
-    const done = Math.abs(cam.s - goal.s) < 0.0005 && Math.abs(cam.cx - goal.cx) < 0.3 && Math.abs(cam.cy - goal.cy) < 0.3;
-    if (done) Object.assign(cam, goal);
-    applyCamera();
-    if (done) moving = false;
-    else requestAnimationFrame(tick);
-  })(last);
+  if (moving) return moving;
+  let resolve;
+  moving = new Promise((r) => { resolve = r; });
+  const flight = moving;
+  {
+    let last = performance.now();
+    (function tick(now) {
+      // Ease out, zooming on a log scale so zoom in and zoom out feel the same; the turn follows along
+      const k = 1 - Math.pow(1 - 0.075, Math.min(4, (now - last) / 16.7));
+      last = now;
+      cam.s = Math.exp(Math.log(cam.s) + (Math.log(goal.s) - Math.log(cam.s)) * k);
+      cam.cx += (goal.cx - cam.cx) * k;
+      cam.cy += (goal.cy - cam.cy) * k;
+      cam.a += (goal.a - cam.a) * k;
+      const done = Math.abs(cam.s - goal.s) < 0.0005 && Math.abs(cam.cx - goal.cx) < 0.3 && Math.abs(cam.cy - goal.cy) < 0.3 && Math.abs(cam.a - goal.a) < 0.0002;
+      if (done) Object.assign(cam, goal);
+      applyCamera();
+      if (done) { moving = false; resolve(); }
+      else requestAnimationFrame(tick);
+    })(last);
+  }
+  return flight;
 }
 
 function show(name, instant) {
   view = name;
   document.body.dataset.view = name;
-  title.style.opacity = name === 'overview' ? 1 : 0;
-  optionsEl.style.opacity = name === 'overview' ? 0 : 1;
   optionsEl.inert = name !== 'options';
   toolEl.inert = name !== 'tool';
   backPill.hidden = name === 'overview';
   backPill.querySelector('span').textContent = name === 'tool' && files.length ? 'other options' : 'start over';
   if (name !== 'tool') activeDrop = terminalDrop;
-  flyTo(viewTarget(name), instant);
+  if (name === 'overview') korbiLeave();
+  return flyTo(viewTarget(name), instant);
 }
 
 // ---------- Terminal ----------
@@ -146,6 +182,7 @@ function show(name, instant) {
 const PROMPT = '<span class="t-user">you@tokit</span>:<span class="t-path">~</span>$ ';
 const cursor = h('span', { class: 'cursor' });
 let typing = Promise.resolve();
+let hurry = false;     // set by a click or key during the first-visit intro
 
 function line(html = '') {
   const el = h('div', { html });
@@ -153,16 +190,17 @@ function line(html = '') {
   while (termBody.children.length > 40) termBody.firstElementChild.remove();
   return el;
 }
-const sleep = (ms) => reduceMotion ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => reduceMotion || hurry ? Promise.resolve() : new Promise((r) => setTimeout(r, ms));
 
 // Queue terminal output so lines never interleave
 function say(fn) {
   typing = typing.then(fn).catch(console.error);
   return typing;
 }
+
 // The empty prompt waiting at the bottom; the next command is typed into it instead of a new line
 let promptEl = null;
-async function command(text) {
+async function command(text, speed = 70) {
   cursor.remove();
   const el = promptEl || line(PROMPT);
   promptEl = null;
@@ -170,9 +208,9 @@ async function command(text) {
   el.append(span, cursor);
   for (const ch of text) {
     span.textContent += ch;
-    await sleep(text.length > 30 ? 25 : 70);
+    await sleep(speed);
   }
-  await sleep(350);
+  await sleep(speed > 40 ? 350 : 120);
   cursor.remove();
 }
 function ready() {
@@ -192,25 +230,64 @@ const log = (html, cls = 't-dim') => say(async () => {
   ready();
 });
 
-function intro() {
-  say(async () => {
-    ready();
-    await sleep(900);
-    await command('tokit --help');
-    await print('<span class="t-dim">drop a file here, or anywhere on the page.</span>', 700);
-    await print('<span class="t-dim">or click this window to pick one.</span>', 700);
-    await print('<span class="t-dim">works with pdf, images, word, excel,</span>', 250);
-    await print('<span class="t-dim">powerpoint, audio, video and text.</span>', 500);
-    ready();
-  });
+const HELP = [
+  ['drop a file here, or anywhere on the page.', 700],
+  ['or click this window to pick one.', 700],
+  ['works with pdf, images, word, excel,', 250],
+  ['powerpoint, audio, video and text.', 300],
+];
+async function printHelp() {
+  for (const [text, pause] of HELP) await print(`<span class="t-dim">${text}</span>`, pause);
+  ready();
 }
+
+// A line of humour now and then, never on every action
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
+const SAVED_JOKES = [
+  'your file never left. promise.',
+  'no upload, no account, no nonsense.',
+  'that one was easy.',
+  'go on, drop another.',
+  'done before the kettle boiled.',
+];
+let saves = 0;
 
 // Everything a tool saves shows up in the terminal too
 const saveBlob = downloadBlob;
 downloadBlob = (blob, name) => {
   saveBlob(blob, name);
-  log(`saved <span class="t-file">${escapeHtml(name)}</span>, ${formatBytes(blob.size)}`, 't-ok');
+  saves++;
+  say(async () => {
+    await print(`<span class="t-ok">saved <span class="t-file">${escapeHtml(name)}</span>, ${formatBytes(blob.size)}</span>`, 300);
+    if (saves === 1 || Math.random() < 0.3) await print(`<span class="t-dim">${pick(SAVED_JOKES)}</span>`, 0);
+    ready();
+  });
+  korbiArrive();
 };
+
+// ---------- Korbi, the guest: sits down on the terminal after your first save ----------
+
+let korbiReady = null;
+let korbiHere = false;
+function loadKorbi() {
+  korbiReady ||= cutOutPose('img/korbi-laptop.webp').then((pose) => { korbi.src = pose.url; }).catch(() => null);
+  return korbiReady;
+}
+async function korbiArrive() {
+  if (korbiHere || !L.K || view === 'overview') return;
+  korbiHere = true;
+  await loadKorbi();
+  if (!korbiHere) return;
+  korbi.classList.add('is-here');
+  say(async () => {
+    await print('<span class="t-dim">korbi joined. he likes watching files get fixed.</span>', 0);
+    ready();
+  });
+}
+function korbiLeave() {
+  korbiHere = false;
+  korbi.classList.remove('is-here');
+}
 
 // ---------- Files in, options out ----------
 
@@ -258,31 +335,45 @@ function suggest(list) {
 }
 let suggestions = [];
 
+// The big moment: the file lands in the terminal, then the camera swings over to the options
 async function openFiles(list) {
   if (!list.length) return;
+  skipIntro();
   files = [...list];
   suggestions = suggest(files);
   const first = files[0];
   const kinds = [...new Set(files.map(kindOf))];
-  say(async () => {
-    await command(`tokit open ${files.length === 1 ? quoteName(first.name) : `${files.length} files`}`);
+  drawOptions();
+  terminal.classList.remove('is-landing');
+  void terminal.offsetWidth;   // restart the animation
+  terminal.classList.add('is-landing');
+  await say(async () => {
+    await command(`tokit open ${files.length === 1 ? quoteName(first.name) : `${files.length} files`}`, 22);
     for (const f of files.slice(0, 5)) {
       let extra = '';
       if (kindOf(f) === 'pdf') {
         try { extra = `, ${plural((await openPdf(f)).pageCount, 'page')}`; } catch { extra = ', can\'t read it'; }
       }
-      await print(`  <span class="t-file">${escapeHtml(f.name)}</span>  <span class="t-dim">${KIND_NAME[kindOf(f)]}${extra}, ${formatBytes(f.size)}</span>`, 250);
+      await print(`  <span class="t-file">${escapeHtml(f.name)}</span>  <span class="t-dim">${KIND_NAME[kindOf(f)]}${extra}, ${formatBytes(f.size)}</span>`, 150);
     }
-    if (files.length > 5) await print(`  <span class="t-dim">and ${files.length - 5} more</span>`, 250);
-    if (kinds.includes('other')) await print('<span class="t-dim">not much I can do with this one yet. old .doc and .ppt files: save them as .docx or .pptx first.</span>', 400);
+    if (files.length > 5) await print(`  <span class="t-dim">and ${files.length - 5} more</span>`, 150);
+    if (kinds.includes('other')) {
+      await print('<span class="t-dim">hm. never seen one of these.</span>', 300);
+      await print('<span class="t-dim">old .doc or .ppt? save it as .docx or .pptx first.</span>', 300);
+    }
     await print(`<span class="t-ok">${plural(suggestions.length, 'thing')} you can do. pick one ${L.wide ? 'on the left' : 'below'}.</span>`, 0);
     ready();
   });
-  drawOptions();
   if (location.hash === '#/open') show('options');
   else location.hash = '#/open';
 }
 const quoteName = (n) => /\s/.test(n) ? `"${n}"` : n;
+
+const colorOf = (t) => TOOL_COLORS[t.id] || categoryOf(t).color;
+const tileFor = (t) => {
+  const c = colorOf(t);
+  return h('div', { class: `tile tile--${c}`, html: TOOL_ICONS[t.id] || categoryOf(t).icon, style: { '--tile-bg': `var(--${c})` } });
+};
 
 function drawOptions() {
   const tools = suggestions.map((id) => TOOLS.find((t) => t.id === id)).filter(Boolean);
@@ -292,13 +383,10 @@ function drawOptions() {
       h('h2', {}, files.length === 1 ? first.name : plural(files.length, 'file')),
       h('p', {}, 'what should happen with it?'),
     ),
-    h('div', { class: 'cards' }, tools.map((t) => {
-      const cat = categoryOf(t);
-      return h('a', { class: 'card', href: `#/${t.id}` },
-        h('div', { class: `tile tile--${cat.color}`, html: TOOL_ICONS[t.id] || cat.icon, style: { '--tile-bg': `var(--${cat.color})` } }),
-        h('span', { class: 'card-label' }, t.name),
-      );
-    })),
+    h('div', { class: 'cards' }, tools.map((t, i) => h('a', { class: 'card', href: `#/${t.id}`, style: { '--i': i } },
+      tileFor(t),
+      h('span', { class: 'card-label' }, t.name),
+    ))),
   );
   sizeCards();
 }
@@ -325,12 +413,11 @@ function sizeCards() {
 // ---------- Tools ----------
 
 function openTool(t) {
-  const cat = categoryOf(t);
   document.title = `${t.name} · toKIT`;
   const body = h('div', {});
   toolEl.replaceChildren(
     h('header', { class: 'tool-top' },
-      h('div', { class: `tile tile--${cat.color}`, html: TOOL_ICONS[t.id] || cat.icon, style: { '--tile-bg': `var(--${cat.color})` } }),
+      tileFor(t),
       h('div', {}, h('h1', {}, t.name), h('p', {}, t.intro || t.desc)),
     ),
     body,
@@ -341,8 +428,7 @@ function openTool(t) {
   if (activeDrop === terminalDrop) activeDrop = null;
   if (files.length) handFiles(body);
   say(async () => {
-    await command(`tokit ${t.id}${files.length ? ' ' + (files.length === 1 ? quoteName(files[0].name) : `${files.length} files`) : ''}`);
-    await print(`<span class="t-dim">${L.wide ? 'ready on the right.' : 'ready.'}</span>`, 0);
+    await command(`tokit ${t.id}${files.length ? ' ' + (files.length === 1 ? quoteName(files[0].name) : `${files.length} files`) : ''}`, 22);
     ready();
   });
   show('tool');
@@ -505,9 +591,49 @@ addEventListener('keydown', (e) => {
 });
 
 // ---------- Start ----------
+// First visit: start at 100 % on the terminal, type, then pull back askew to show the whole sheet.
+// Later visits (and reduced motion) start on the overview straight away. Any key, click or drop skips.
 
-document.fonts.ready.then(() => {
+const SEEN = 'tokit:seen';
+const firstVisit = (() => { try { return !localStorage.getItem(SEEN); } catch { return false; } })();
+let introRunning = false;
+function skipIntro() {
+  if (!introRunning) return;
+  introRunning = false;
+  hurry = true;
+  if (view === 'overview') flyTo(viewTarget('overview'), true);
+  typing.then(() => { hurry = false; });
+}
+
+function start() {
   computeLayout();
   route(true);
-  intro();
+  if (view !== 'overview' || !firstVisit || reduceMotion) {
+    say(async () => {
+      ready();
+      await sleep(700);
+      await command('tokit --help');
+      await printHelp();
+    });
+    return;
+  }
+  try { localStorage.setItem(SEEN, '1'); } catch { /* private mode: the intro just plays again next time */ }
+  introRunning = true;
+  const { T } = L;
+  Object.assign(cam, { cx: T.x + T.w / 2, cy: T.y + T.h / 2, s: 1, a: 0 });
+  applyCamera();
+  ['pointerdown', 'keydown', 'wheel'].forEach((ev) => addEventListener(ev, skipIntro, { once: true, passive: true }));
+  say(async () => {
+    ready();
+    await sleep(400);
+    await command('tokit --help', 55);
+    if (introRunning) flyTo(viewTarget('overview')).then(() => { introRunning = false; });
+    await printHelp();
+  });
+}
+
+document.fonts.ready.then(() => {
+  start();
+  // Cut Korbi out in the background so he is ready when you save something
+  (window.requestIdleCallback || setTimeout)(() => loadKorbi());
 });

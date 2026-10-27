@@ -30,3 +30,13 @@ const TOOL_ICONS = {
   'audio-convert': DOODLE(`<path d="M30 70 L 30 20 L 64 12 L 64 62"/><circle cx="22" cy="72" r="9"/><circle cx="56" cy="64" r="9"/><path ${A} d="M70 84 C 82 84, 90 76, 90 64 M 84 70 L 90 62 L 96 70"/>`),
   'video-to-audio': DOODLE(`<path d="M6 22 C 18 21, 32 22, 44 21 C 45 40, 44 58, 45 76 C 32 77, 18 76, 7 77 C 6 58, 7 40, 6 22 Z"/><path d="M20 38 L 32 48 L 20 58 Z"/><path ${A} d="M50 48 L 62 48 M 57 41 L 63 48 L 57 55"/><path d="M76 66 L 76 30 L 94 26 L 94 62"/><circle cx="71" cy="68" r="6"/><circle cx="89" cy="64" r="6"/>`),
 };
+
+// One pastel per tool, mixed like the project tiles on the portfolio, so a file's options never
+// come out in a single colour. Tools not listed fall back to their category's colour.
+const TOOL_COLORS = {
+  'organize-pdf': 'peach', 'split-pdf': 'cream', 'extract-pages': 'apricot', 'pdf-to-images': 'blue', 'merge-pdf': 'rose',
+  'compress-image': 'blue', 'resize-image': 'peach', 'convert-image': 'cream', 'crop-image': 'apricot', 'remove-metadata': 'rose', 'images-to-pdf': 'lilac',
+  'word-convert': 'blue', 'excel-convert': 'sage', 'csv-to-excel': 'sage', 'slides-text': 'peach', 'office-images': 'apricot',
+  'audio-trim': 'rose', 'audio-convert': 'peach', 'video-to-audio': 'lilac',
+  'word-count': 'cream', 'case-converter': 'peach', 'clean-lines': 'blue', 'json-formatter': 'lilac', 'text-diff': 'rose', 'base64': 'apricot', 'hash': 'sage',
+};
