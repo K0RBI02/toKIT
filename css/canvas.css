@@ -1,0 +1,252 @@
+/* The canvas: one big sheet of grid paper the camera moves over, like k0rbi02.github.io.
+   Overview: free space on the left, the terminal top right, the headline bottom right.
+   Drop a file: the camera zooms in on the free space, which now holds what you can do.
+   Pick something: the camera moves to the right of the terminal, where the tool waits. */
+
+html, body { height: 100%; overflow: hidden; }
+body { overscroll-behavior: none; }
+
+.grid {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  pointer-events: none;
+}
+:root { --grid-line: #ECEAE4; }
+@media (prefers-color-scheme: dark) { :root { --grid-line: #22201E; } }
+
+.world {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+.region { position: absolute; }
+
+/* ---------- Headline (bottom right of the overview) ---------- */
+
+.big-title {
+  position: absolute;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+  text-align: right;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity .5s ease;
+}
+.big-title > span { display: block; }
+.underline { position: relative; }
+.underline svg {
+  position: absolute;
+  left: 0;
+  bottom: 0.08em;
+  width: 100%;
+  height: 0.12em;
+  overflow: visible;
+}
+
+/* ---------- Terminal: drop target and a look at what is happening ---------- */
+
+.terminal {
+  --term-bg: #161514;
+  --term-bar: #201E1C;
+  --term-ink: #ECE9E3;
+  --term-dim: #A39E95;
+
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--term-bg);
+  color: var(--term-ink);
+  border-radius: var(--radius);
+  box-shadow: 0 30px 60px -30px rgba(17, 17, 16, .45);
+  transform: rotate(1.6deg);
+  cursor: pointer;
+  transition: box-shadow .2s ease;
+}
+@media (prefers-color-scheme: dark) {
+  .terminal { box-shadow: 0 0 0 1px #2E2C29, 0 30px 60px -30px rgba(0, 0, 0, .8); }
+}
+.terminal.is-over { box-shadow: 0 0 0 4px var(--accent), 0 30px 60px -30px rgba(17, 17, 16, .45); }
+.terminal:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+
+.terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--term-bar);
+  font: 13px var(--font-mono);
+  color: var(--term-dim);
+}
+.terminal-bar i { width: 12px; height: 12px; border-radius: 50%; background: #3A3734; }
+.terminal-bar span { margin: 0 auto; padding-right: 60px; }
+
+.terminal-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  margin: 0;
+  padding: 18px 22px;
+  overflow: hidden;
+  font: 14px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.t-user { color: var(--accent); }
+.t-path, .t-dim { color: var(--term-dim); }
+.t-ok { color: #7CD39A; }
+.t-bad { color: #FF8F8F; }
+.t-file { color: var(--term-ink); font-weight: 500; }
+.cursor {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.1em;
+  margin-bottom: -0.2em;
+  background: var(--term-ink);
+  animation: blink 1.1s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------- Options: what you can do with the dropped file ---------- */
+
+.region-options {
+  display: flex;
+  flex-direction: column;
+  transition: opacity .4s ease;
+}
+.options-head { margin-bottom: 32px; }
+.options-head h2 {
+  margin: 0;
+  font-size: 40px;
+  font-stretch: 85%;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.options-head p { margin: 8px 0 0; font: 13px var(--font-mono); color: var(--ink-soft); }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), var(--card, 160px));
+  gap: calc(var(--card, 160px) * 0.18) calc(var(--card, 160px) * 0.16);
+  align-content: start;
+}
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.card .tile {
+  width: 100%;
+  box-shadow: 0 18px 40px -22px rgba(17, 17, 16, .35);
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1);
+}
+.card:hover .tile, .card:focus-visible .tile { transform: translateY(-6px) rotate(-2deg); }
+.card:focus-visible { outline: none; }
+.card:focus-visible .tile { outline: 3px solid var(--accent); outline-offset: 4px; }
+.card-label { font: 13px var(--font-mono); color: var(--ink-soft); text-align: center; line-height: 1.4; }
+.card:hover .card-label { color: var(--ink); }
+
+.options-empty { font: 14px var(--font-mono); color: var(--ink-soft); max-width: 46ch; line-height: 1.7; }
+
+/* ---------- Tool: right of the terminal ---------- */
+
+.region-tool {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 4px 32px;
+  scrollbar-width: thin;
+}
+.region-tool .side { top: 0; }
+.tool-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.tool-top .tile { width: 56px; box-shadow: 0 18px 40px -22px rgba(17, 17, 16, .35); }
+.tool-top h1 {
+  margin: 0;
+  font-size: 40px;
+  font-stretch: 85%;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.tool-top p { margin: 6px 0 0; color: var(--ink-soft); font-size: 15px; max-width: 60ch; }
+.region-tool .tool-body { grid-template-columns: minmax(0, 1fr) 280px; }
+@media (max-width: 760px) {
+  .region-tool .tool-body { grid-template-columns: minmax(0, 1fr); }
+  .tool-top h1 { font-size: 30px; }
+}
+
+/* ---------- HUD: fixed on screen, like the portfolio ---------- */
+
+.hud {
+  position: fixed;
+  right: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 30;
+  display: flex;
+  gap: 8px;
+}
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0.7em 1.25em;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font: 13px var(--font-mono);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color .25s ease, color .25s ease;
+}
+.hud-pill:hover { background: var(--accent); color: #111110; }
+.hud-pill svg { width: 16px; height: 16px; }
+.zoom-pill { min-width: 62px; justify-content: center; pointer-events: none; }
+.site-footer {
+  position: fixed;
+  left: var(--gutter);
+  bottom: var(--gutter);
+  z-index: 30;
+  margin: 0;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  font: 12px var(--font-mono);
+  color: var(--ink-soft);
+}
+.site-footer a { color: inherit; }
+@media (max-width: 600px) {
+  .hud .github-pill span, .site-footer .footer-long { display: none; }
+  /* The back button needs the room once you are past the start */
+  body:not([data-view="overview"]) .site-footer { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cursor { animation: none; }
+}
