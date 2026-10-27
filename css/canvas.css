@@ -163,30 +163,41 @@ body { overscroll-behavior: none; }
   white-space: nowrap;
 }
 
-/* ---------- Workflow sketch: fills the free space on the overview ---------- */
+/* ---------- Tool reel: all tools scrolling by on the overview ---------- */
 
-.flow {
+.reel {
   position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2%;
-  color: var(--ink-faint);
-  pointer-events: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  column-gap: calc(var(--col, 160px) * 0.14);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
   transition: opacity .4s ease;
 }
-.flow-step { display: grid; justify-items: center; gap: 14px; flex: 0 0 24%; }
-.flow-tile {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 1;
-  border: 2.5px dashed color-mix(in srgb, var(--ink-faint) 60%, transparent);
-  border-radius: 16%;
+.reel-col { display: flex; justify-content: center; }
+.reel-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: reel-up var(--dur, 60s) linear infinite;
+  will-change: transform;
 }
-.flow-tile svg { width: 56%; }
-.flow-step span { font: 15px var(--font-mono); color: var(--ink-soft); }
-.flow-arrow { flex: 1; min-width: 0; }
+.reel-col:nth-child(2) .reel-track { animation-name: reel-down; }
+@keyframes reel-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+@keyframes reel-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
+.reel:hover .reel-track, .reel:focus-within .reel-track, .reel.is-frozen .reel-track { animation-play-state: paused; }
+.reel .card { width: var(--tile, 140px); padding-bottom: calc(var(--tile, 140px) * 0.4); }
+.reel .card-label { font-size: 15px; }
+.reel-card { transition: opacity .45s ease, transform .45s ease; }
+.reel-card.is-out { opacity: 0; transform: scale(.88); }
+.reel-card.is-match .tile { box-shadow: 0 0 0 3px var(--accent), 0 18px 40px -22px rgba(17, 17, 16, .35); }
+.reel.is-gone { opacity: 0; transition: none; }
+body:not([data-view="overview"]) .reel { opacity: 0; pointer-events: none; }
+
+/* Options flying out of the reel: show the region at once, no staggered entrance */
+.region-options.is-flying { transition: none; }
+body[data-view="options"] .region-options.is-flying .card { animation: none; }
 
 /* ---------- Korbi, sitting on the terminal once you saved something ---------- */
 
@@ -206,8 +217,7 @@ body { overscroll-behavior: none; }
 
 /* ---------- What shows in which view ---------- */
 
-body:not([data-view="overview"]) .big-title,
-body:not([data-view="overview"]) .flow { opacity: 0; }
+body:not([data-view="overview"]) .big-title { opacity: 0; }
 .region-options, .region-tool { transition: opacity .35s ease, transform .35s ease; }
 body[data-view="overview"] .region-options { opacity: 0; }
 body[data-view="tool"] .region-options { opacity: 0; transform: translateX(-24px); pointer-events: none; }
@@ -346,6 +356,6 @@ body[data-view="options"] .card { animation: card-in .45s cubic-bezier(.2, .8, .
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cursor, .terminal.is-landing, .card { animation: none !important; }
+  .cursor, .terminal.is-landing, .card, .reel-track { animation: none !important; }
   .korbi.is-here { transition: none; }
 }

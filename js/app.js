@@ -1,6 +1,6 @@
 // toKIT canvas: a camera over one big sheet of grid paper, like k0rbi02.github.io.
 //
-//   overview   askew and zoomed out: the workflow sketch on the left, terminal top right, headline bottom right
+//   overview   askew and zoomed out: every tool scrolling by on the left, terminal top right, headline bottom right
 //   options    #/open: the desk straightens out at 100 %, the left half shows what you can do with the file
 //   tool       #/<tool-id>: the tool takes the place of the options, the terminal stays on the right
 
@@ -12,7 +12,7 @@ const terminal = $('#terminal');
 const termBody = $('#terminal-body');
 const selection = $('#selection');
 const title = $('#big-title');
-const flow = $('#flow');
+const reel = $('#reel');
 const korbi = $('#korbi');
 const optionsEl = $('#options');
 const toolEl = $('#tool');
@@ -30,7 +30,7 @@ let L = null;          // layout in world pixels
 // ---------- Layout ----------
 // At zoom 100 % one world pixel is one screen pixel, so options and tools are laid out at real size.
 // The overview is a composed screen at zoom S0, turned by TILT: terminal in the top right corner,
-// headline (kept straight on screen) in the bottom right corner, the workflow sketch on the left.
+// headline (kept straight on screen) in the bottom right corner, the tool reel on the left.
 
 const deg = Math.PI / 180;
 
@@ -90,11 +90,18 @@ function computeLayout() {
   const [wx, wy] = toWorld(W - m - (tw * S0) / 2, H - hud - m - (th * S0) / 2, L.overview);
   Object.assign(title.style, { left: `${wx - tw / 2}px`, top: `${wy - th / 2}px`, transform: `rotate(${-TILT}rad)` });
 
-  // Workflow sketch: in the free space left of the terminal, level with it
-  const fw = Math.min(wide ? (W - 3 * m) / S0 - T.w - m * 2 : T.w, wide ? T.w * 1.15 : T.w);
-  Object.assign(flow.style, wide
-    ? { left: `${-m * 2 - fw}px`, top: `${T.h * 0.12}px`, width: `${fw}px`, display: '' }
-    : { display: 'none' });
+  // Tool reel: fills the free space on the left, from the top of the screen to the bottom...
+  if (wide) {
+    // ...up to whichever comes first, the terminal or the headline
+    const freeW = (Math.min(W - m - T.w * S0, W - m - tw * S0) - 2 * m - H * Math.sin(TILT)) / S0;   // the turn pushes the bottom right corner out
+    const top = L.overview.cy - H / 2 / S0 - 80, height = H / S0 + 160;
+    L.reel = { x: -m - freeW, y: top, w: freeW, h: height };
+    place(reel, L.reel);
+    reel.style.display = '';
+    layoutReel();
+  } else {
+    reel.style.display = 'none';
+  }
 
   // Korbi sits on the terminal's top edge, a bit right of centre, legs over the edge
   if (K) Object.assign(korbi.style, { height: `${K}px`, left: `${T.x + T.w * 0.56}px`, top: `${T.y - K * 0.9}px`, display: '' });
@@ -173,7 +180,7 @@ function show(name, instant) {
   backPill.hidden = name === 'overview';
   backPill.querySelector('span').textContent = name === 'tool' && files.length ? 'other options' : 'start over';
   if (name !== 'tool') activeDrop = terminalDrop;
-  if (name === 'overview') korbiLeave();
+  if (name === 'overview') { korbiLeave(); resetReel(); }
   return flyTo(viewTarget(name), instant);
 }
 
@@ -339,10 +346,14 @@ let suggestions = [];
 async function openFiles(list) {
   if (!list.length) return;
   skipIntro();
+  // Whatever the terminal is still typing finishes at once, so a drop never waits
+  hurry = true;
+  typing.then(() => { hurry = false; });
   files = [...list];
   suggestions = suggest(files);
   const first = files[0];
   const kinds = [...new Set(files.map(kindOf))];
+  const from = L.wide && view === 'overview' && !reduceMotion ? sortReel(suggestions) : null;
   drawOptions();
   terminal.classList.remove('is-landing');
   void terminal.offsetWidth;   // restart the animation
@@ -364,6 +375,7 @@ async function openFiles(list) {
     await print(`<span class="t-ok">${plural(suggestions.length, 'thing')} you can do. pick one ${L.wide ? 'on the left' : 'below'}.</span>`, 0);
     ready();
   });
+  if (from) flyOptions(from);
   if (location.hash === '#/open') show('options');
   else location.hash = '#/open';
 }
@@ -408,6 +420,98 @@ function sizeCards() {
   }
   cards.style.setProperty('--card', `${Math.floor(best)}px`);
   cards.style.setProperty('--cols', bestCols);
+}
+
+// ---------- Tool reel: every tool scrolling by in three columns on the overview ----------
+// Each column holds its share of the tools twice, so moving it by half its height loops seamlessly.
+
+const REEL_SPEEDS = [22, 17, 26];   // px per second at 100 %, one per column so they drift apart
+
+function buildReel() {
+  const tools = TOOLS.filter((t) => !t.href);
+  const cols = [[], [], []];
+  tools.forEach((t, i) => cols[i % 3].push(t));
+  const card = (t, copy) => h('a', {
+    class: 'card reel-card',
+    href: `#/${t.id}`,
+    'data-tool': t.id,
+    tabindex: copy ? -1 : null,
+    'aria-hidden': copy ? 'true' : null,
+  }, tileFor(t), h('span', { class: 'card-label' }, t.name));
+  reel.replaceChildren(...cols.map((list) => h('div', { class: 'reel-col' },
+    h('div', { class: 'reel-track' }, list.map((t) => card(t, false)), list.map((t) => card(t, true))),
+  )));
+}
+
+function layoutReel() {
+  if (!reel.firstChild) buildReel();
+  const col = L.reel.w / (3 + 2 * 0.14);
+  reel.style.setProperty('--col', `${col}px`);
+  reel.style.setProperty('--tile', `${Math.round(Math.min(col * 0.62, 170))}px`);
+  reel.querySelectorAll('.reel-track').forEach((track, i) => {
+    const half = track.scrollHeight / 2;
+    const dur = half / REEL_SPEEDS[i];
+    track.style.setProperty('--dur', `${dur.toFixed(1)}s`);
+    track.style.animationDelay = `${(-(i * 0.37) % 1 * dur).toFixed(1)}s`;   // columns start out of step
+  });
+}
+
+// World coordinates of a point on screen (undoing the camera's move, turn and zoom)
+function screenToWorld(x, y) {
+  const dx = (x - L.W / 2) / cam.s, dy = (y - L.H / 2) / cam.s;
+  const c = Math.cos(-cam.a), sn = Math.sin(-cam.a);
+  return [cam.cx + dx * c - dy * sn, cam.cy + dx * sn + dy * c];
+}
+
+// Freeze the reel, let everything that doesn't fit the file fade away, and remember where the
+// matching tiles are so the options can fly out of exactly those spots
+function sortReel(ids) {
+  reel.classList.add('is-frozen');
+  const box = reel.getBoundingClientRect();
+  const midY = box.top + box.height / 2;
+  const from = {};
+  for (const card of reel.querySelectorAll('.reel-card')) {
+    const id = card.dataset.tool;
+    const match = ids.includes(id);
+    card.classList.toggle('is-match', match);
+    card.classList.toggle('is-out', !match);
+    if (!match) continue;
+    const tile = card.querySelector('.tile');
+    const r = tile.getBoundingClientRect();
+    const dist = Math.abs(r.top + r.height / 2 - midY);
+    if (from[id] && from[id].dist <= dist) continue;
+    const [x, y] = screenToWorld(r.left + r.width / 2, r.top + r.height / 2);
+    from[id] = { x, y, w: tile.offsetWidth, a: cam.a, dist };
+  }
+  return from;
+}
+
+function resetReel() {
+  reel.classList.remove('is-frozen', 'is-gone');
+  reel.querySelectorAll('.is-match, .is-out').forEach((c) => c.classList.remove('is-match', 'is-out'));
+}
+
+// The option tiles start where their twins stood in the reel and glide into the grid
+function flyOptions(from) {
+  reel.classList.add('is-gone');
+  optionsEl.classList.add('is-flying');
+  const { O } = L;
+  for (const card of optionsEl.querySelectorAll('.card')) {
+    const f = from[card.getAttribute('href').slice(2)];
+    if (!f) continue;
+    const tile = card.querySelector('.tile');
+    const tx = O.x + tile.offsetLeft + tile.offsetWidth / 2, ty = O.y + tile.offsetTop + tile.offsetHeight / 2;
+    const ox = tile.offsetLeft - card.offsetLeft + tile.offsetWidth / 2, oy = tile.offsetTop - card.offsetTop + tile.offsetHeight / 2;
+    card.style.transformOrigin = `${ox}px ${oy}px`;
+    card.style.transition = 'none';
+    card.style.transform = `translate(${f.x - tx}px, ${f.y - ty}px) rotate(${-f.a}rad) scale(${f.w / tile.offsetWidth})`;
+  }
+  void optionsEl.offsetWidth;
+  for (const card of optionsEl.querySelectorAll('.card')) {
+    card.style.transition = 'transform .9s cubic-bezier(.2, .8, .2, 1)';
+    card.style.transform = '';
+  }
+  setTimeout(() => optionsEl.classList.remove('is-flying'), 950);
 }
 
 // ---------- Tools ----------
