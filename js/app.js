@@ -568,7 +568,7 @@ terminal.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key ===
 function route(instant = false) {
   if (typeof cleanup === 'function') cleanup();
   cleanup = null;
-  if (palette.open) palette.close();
+  closePalette();
   const id = location.hash.replace(/^#\/?/, '');
   const t = TOOLS.find((x) => x.id === id && !x.href);
   if (t) return openTool(t);
@@ -664,7 +664,7 @@ function drawPalette() {
   paletteIndex = clamp(paletteIndex, 0, Math.max(0, found.length - 1));
   paletteList.replaceChildren(...found.map((t, i) => {
     const cat = categoryOf(t);
-    return h('li', {}, h('a', { href: hrefOf(t), class: i === paletteIndex ? 'is-active' : '', onclick: () => palette.close() },
+    return h('li', {}, h('a', { href: hrefOf(t), class: i === paletteIndex ? 'is-active' : '', onclick: closePalette },
       h('div', { class: `tile tile--${cat.color}`, html: cat.icon }),
       t.name,
       h('span', {}, cat.name),
@@ -684,11 +684,25 @@ paletteInput.addEventListener('keydown', (e) => {
     links[paletteIndex].click();
   }
 });
-palette.addEventListener('click', (e) => { if (e.target === palette) palette.close(); });
+palette.addEventListener('click', (e) => { if (e.target === palette) closePalette(); });
+palette.addEventListener('cancel', (e) => { e.preventDefault(); closePalette(); });
+
+// Fades out before it really closes; reduced motion closes at once
+function closePalette() {
+  if (!palette.open || palette.classList.contains('is-closing')) return;
+  if (reduceMotion) return palette.close();
+  palette.classList.add('is-closing');
+  palette.addEventListener('animationend', () => {
+    palette.classList.remove('is-closing');
+    palette.close();
+  }, { once: true });
+}
 addEventListener('keydown', (e) => {
   const typingInField = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
   if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !typingInField)) {
     e.preventDefault();
+    // Ctrl+K again closes it
+    if (palette.open) return e.key === 'k' && closePalette();
     paletteInput.value = '';
     paletteIndex = 0;
     drawPalette();

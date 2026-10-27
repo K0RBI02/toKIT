@@ -350,8 +350,19 @@ input[type="color"] { width: 40px; height: 40px; padding: 0; border: 0; backgrou
   color: var(--ink);
   overflow: hidden;
 }
-.palette::backdrop { background: rgba(17,17,16,.45); }
-.palette[open] { display: flex; flex-direction: column; }
+.palette::backdrop {
+  background: rgba(17,17,16,.28);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.palette[open] { display: flex; flex-direction: column; animation: palette-in .22s cubic-bezier(.2, .8, .2, 1); }
+.palette[open]::backdrop { animation: fade-in .22s ease; }
+.palette.is-closing { animation: palette-out .16s ease forwards; }
+.palette.is-closing::backdrop { animation: fade-out .16s ease forwards; }
+@keyframes palette-in { from { opacity: 0; transform: translateY(-10px) scale(.98); } }
+@keyframes palette-out { to { opacity: 0; transform: translateY(-6px) scale(.98); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes fade-out { to { opacity: 0; } }
 .palette input {
   width: 100%;
   padding: 18px 20px;
